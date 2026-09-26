@@ -667,7 +667,26 @@ window.RexEngine = (function () {
     return { total: src.length, chunk: src.slice(offset, offset + length) };
   }
 
-  return { run, status, getChunk };
+  // Saves the finished result straight to the browser's normal Downloads folder —
+  // no manual "Скачать" click needed, this does it programmatically once a run is done.
+  function downloadResult(baseName) {
+    if (!window.__rexResult) return { ok: false, error: 'Нет готового результата.' };
+    baseName = baseName || ('rex2_' + Date.now());
+    const wavBytes = base64ToBytes(window.__rexResult.wavBase64);
+    const audioBlob = new Blob([wavBytes], { type: 'audio/wav' });
+    const vttBlob = new Blob([window.__rexResult.vttContent], { type: 'text/vtt;charset=utf-8' });
+    const a1 = document.createElement('a');
+    a1.href = URL.createObjectURL(audioBlob);
+    a1.download = baseName + '.wav';
+    document.body.appendChild(a1); a1.click(); a1.remove();
+    const a2 = document.createElement('a');
+    a2.href = URL.createObjectURL(vttBlob);
+    a2.download = baseName + '.vtt';
+    document.body.appendChild(a2); a2.click(); a2.remove();
+    return { ok: true, wavName: baseName + '.wav', vttName: baseName + '.vtt', wavBytes: wavBytes.length };
+  }
+
+  return { run, status, getChunk, downloadResult };
 })();
 // ---------- end headless engine API ----------
 
