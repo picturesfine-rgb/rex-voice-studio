@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rex Voice Studio</title>
+<style>
+  :root {
+    --bg: #f7f5f1;
+    --surface: #ffffff;
+    --surface-2: #efece5;
+    --border: #ddd7cb;
+    --text: #221f1a;
+    --text-dim: #6b6559;
+    --accent: #c4551f;
+    --accent-hover: #a8461a;
+    --accent-text: #ffffff;
+    --success: #3f7d4f;
+    --error: #b3401f;
+    --error-bg: #fbeae4;
+    --mono: "SF Mono", "Consolas", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #171512;
+      --surface: #211e19;
+      --surface-2: #2a2620;
+      --border: #3a352c;
+      --text: #f1ede4;
+      --text-dim: #a89f8e;
+      --accent: #e07740;
+      --accent-hover: #f08a54;
+      --accent-text: #171512;
+      --success: #6fbf7f;
+      --error: #ff8a63;
+      --error-bg: #3a2119;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 32px 16px 64px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
+  .logo {
+    width: 46px; height: 46px; border-radius: 12px;
+    background: var(--accent); color: var(--accent-text);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; flex-shrink: 0; font-weight: 700;
+  }
+  h1 { font-size: 21px; margin: 0; letter-spacing: -0.01em; }
+  .sub { color: var(--text-dim); font-size: 13px; margin-top: 2px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text-dim); margin: 0 0 14px;
+  }
+  label { display: block; font-size: 13px; color: var(--text-dim); margin-bottom: 6px; }
+  input[type=text], input[type=password], textarea, select {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 10px 12px;
+    font-size: 14px;
+    color: var(--text);
+    font-family: inherit;
+  }
+  textarea { min-height: 220px; resize: vertical; line-height: 1.5; }
+  input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 180px; }
+  .field { margin-bottom: 14px; }
+  .field:last-child { margin-bottom: 0; }
+  .hint { font-size: 12px; color: var(--text-dim); margin-top: 6px; }
+  details.adv { margin-top: 10px; }
+  details.adv summary { cursor: pointer; font-size: 12.5px; color: var(--text-dim); }
+  details.adv .field { margin-top: 12px; }
+  .toolbar {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: 10px; margin-bottom: 12px;
+  }
+  button.ghost {
+    background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 9px;
+    padding: 8px 13px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  }
+  button.ghost:disabled { opacity: 0.5; cursor: not-allowed; }
+  .meta {
+    font-size: 12px; color: var(--text-dim); display: flex; gap: 10px; flex-wrap: wrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .meta b { color: var(--accent); font-weight: 700; }
+  .charbar { width: 100%; height: 4px; background: var(--surface-2); border-radius: 2px; overflow: hidden; margin-top: 8px; }
+  .charbar-fill { height: 100%; background: var(--border); transition: width .15s; }
+  .charbar-fill.warn { background: var(--accent); }
+  .charbar-fill.danger { background: var(--error); }
+  button.primary {
+    width: 100%;
+    background: var(--accent);
+    color: var(--accent-text);
+    border: none;
+    border-radius: 10px;
+    padding: 13px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 6px;
+  }
+  button.primary:hover { background: var(--accent-hover); }
+  button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status { display: none; margin-top: 16px; }
+  .status.show { display: block; }
+  .step {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 0; font-size: 13.5px; color: var(--text-dim);
+  }
+  .step .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+  .step.active .dot { background: var(--accent); }
+  .step.done { color: var(--text); }
+  .step.done .dot { background: var(--success); }
+  .step.error { color: var(--error); }
+  .step.error .dot { background: var(--error); }
+  .results { display: none; margin-top: 4px; }
+  .results.show { display: block; }
+  .result-row {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--surface-2); border-radius: 9px; padding: 12px 14px; margin-bottom: 10px;
+  }
+  .result-row .name { font-size: 14px; }
+  .result-row .name small { display: block; color: var(--text-dim); font-size: 12px; margin-top: 2px; }
+  a.download {
+    background: var(--accent); color: var(--accent-text);
+    text-decoration: none; padding: 8px 14px; border-radius: 7px;
+    font-size: 13px; font-weight: 600; white-space: nowrap;
+  }
+  audio { width: 100%; margin-top: 10px; }
+  .error-box {
+    display: none; background: var(--error-bg); color: var(--error);
+    border-radius: 9px; padding: 12px 14px; font-size: 12.5px;
+    font-family: var(--mono); white-space: pre-wrap; word-break: break-word;
+    margin-top: 10px; max-height: 220px; overflow-y: auto;
+  }
+  .error-box.show { display: block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">R</div>
+    <div>
+      <h1>Rex Voice Studio</h1>
+      <div class="sub">Озвучка Gemini 3.8 Flash TTS — голос Rex 2</div>
+    </div>
+  </header>
+
+  <div class="card">
+    <h2>Настройки</h2>
+    <div class="field">
+      <label for="apiKey">API-ключ Gemini</label>
+      <input type="password" id="apiKey" placeholder="AQ....">
+    </div>
+    <div class="row">
+      <div class="field">
+        <label for="preset">Стиль голоса Rex 2</label>
+        <select id="preset"></select>
+      </div>
+    </div>
+    <details class="adv">
+      <summary>Дополнительно (голос и стиль вручную)</summary>
+      <div class="field">
+        <label for="baseVoice">Базовый голос Gemini</label>
+        <input type="text" id="baseVoice" list="voiceList" value="Fenrir">
+        <datalist id="voiceList"></datalist>
+      </div>
+      <div class="field">
+        <label for="stylePrompt">Описание стиля (style prompt)</label>
+        <input type="text" id="stylePrompt">
+      </div>
+    </details>
+    <div class="hint">Ключ и настройки сохраняются только в этом браузере на этом компьютере.</div>
+  </div>
+
+  <div class="card">
+    <div class="toolbar">
+      <h2 style="margin:0">Сценарий</h2>
+      <button class="ghost" id="testVoiceBtn" type="button">Тест голоса (5 сек)</button>
+    </div>
+    <div class="field">
+      <textarea id="scriptText" placeholder="Вставь сюда текст сценария (до 20 000 символов)..."></textarea>
+      <div class="charbar"><div class="charbar-fill" id="charbarFill"></div></div>
+    </div>
+    <div class="meta" style="margin-bottom:10px">
+      <span id="charCount">0 / 20 000</span>
+      <span>·</span>
+      <span>Цена: <b id="costEstimate">0.00$</b></span>
+      <span>·</span>
+      <span>Длительность: <b id="durationEstimate">~0 сек</b></span>
+    </div>
+    <button class="primary" id="generateBtn">Сгенерировать</button>
+
+    <div class="status" id="status">
+      <div class="step" id="step-tts"><div class="dot"></div><div id="step-tts-label">Синтез речи (Gemini 3.8 Flash TTS)</div></div>
+      <div class="step" id="step-build"><div class="dot"></div><div>Сборка аудио и файла субтитров</div></div>
+      <div class="error-box" id="errorBox"></div>
+    </div>
+
+    <div class="results" id="results">
+      <audio controls id="audioPlayer"></audio>
+      <div style="margin-top:12px">
+        <div class="result-row">
+          <div class="name">Аудиодорожка<small id="audioMeta"></small></div>
+          <a class="download" id="audioDownload" download>Скачать .wav</a>
+        </div>
+        <div class="result-row">
+          <div class="name">Субтитры с таймкодами<small id="vttMeta"></small></div>
+          <a class="download" id="vttDownload" download>Скачать .vtt</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const MAX_CHARS = 20000;
+const SAMPLE_RATE = 24000, CHANNELS = 1, BYTES_PER_SAMPLE = 2;
+const BYTES_PER_SECOND = SAMPLE_RATE * CHANNELS * BYTES_PER_SAMPLE;
+
+const VOICES = ["Zephyr","Puck","Charon","Kore","Fenrir","Leda","Orus","Aoede","Callirrhoe",
+"Autonoe","Enceladus","Iapetus","Umbriel","Algieba","Despina","Erinome","Algenib","Rasalgethi",
+"Laomedeia","Achernar","Alnilam","Schedar","Gacrux","Pulcherrima","Achird","Zubenelgenubi",
+"Vindemiatrix","Sadachbia","Sadaltager","Sulafat"];
+
+const REX2_PRESETS = [
+  { id: 'rex2-signature', name: 'Rex 2 — Фирменный баритон', stylePrompt: 'Deep, resonant, authoritative baritone narrator with warm presence, impeccable articulation, and confident pacing.', baseVoice: 'Fenrir' },
+  { id: 'rex2-cinematic', name: 'Rex 2 — Эпичный / Кинематографичный', stylePrompt: 'Cinematic, dramatic, deep resonant voice with gravitas, suspenseful pacing, and epic delivery.', baseVoice: 'Fenrir' },
+  { id: 'rex2-storytelling', name: 'Rex 2 — Сторителлинг / Аудиокнига', stylePrompt: 'Warm, engaging audiobook narrator, intimate and expressive storytelling cadence with natural breaths and subtle emotional shifts.', baseVoice: 'Fenrir' },
+  { id: 'rex2-news', name: 'Rex 2 — Новости и Презентации', stylePrompt: 'Crisp, modern news anchor and tech presenter, brisk articulation, high intelligibility, and confident professional delivery.', baseVoice: 'Fenrir' },
+  { id: 'rex2-calm', name: 'Rex 2 — Спокойный документалист', stylePrompt: 'Calm, measured, contemplative documentary voiceover with gentle baritone warmth and relaxed pacing.', baseVoice: 'Charon' },
+];
+
+const DEFAULT_REX_STYLE = 'Rex 2 persona: Charismatic, authoritative, deep resonant male baritone narrator with crystal clear diction, natural conversational pacing, and engaging studio voiceover quality.';
+
+const $ = id => document.getElementById(id);
+
+// Populate voice datalist
+const voiceListEl = $('voiceList');
+VOICES.forEach(v => { const o = document.createElement('option'); o.value = v; voiceListEl.appendChild(o); });
+
+// Populate presets
+REX2_PRESETS.forEach(p => {
+  const o = document.createElement('option');
+  o.value = p.id; o.textContent = p.name;
+  $('preset').appendChild(o);
+});
+
+function applyPreset(id) {
+  const p = REX2_PRESETS.find(p => p.id === id) || REX2_PRESETS[0];
+  $('baseVoice').value = p.baseVoice;
+  $('stylePrompt').value = p.stylePrompt;
+}
+$('preset').addEventListener('change', e => { applyPreset(e.target.value); saveSettings(); });
+
+function saveSettings() {
+  try {
+    localStorage.setItem('rex_api_key', $('apiKey').value);
+    localStorage.setItem('rex_preset', $('preset').value);
+    localStorage.setItem('rex_base_voice', $('baseVoice').value);
+    localStorage.setItem('rex_style', $('stylePrompt').value);
+  } catch (e) {}
+}
+['apiKey', 'baseVoice', 'stylePrompt'].forEach(id => $(id).addEventListener('input', saveSettings));
+
+// Restore settings
+try {
+  $('apiKey').value = localStorage.getItem('rex_api_key') || '';
+  const savedPreset = localStorage.getItem('rex_preset') || 'rex2-signature';
+  $('preset').value = savedPreset;
+  applyPreset(savedPreset);
+  const savedVoice = localStorage.getItem('rex_base_voice');
+  const savedStyle = localStorage.getItem('rex_style');
+  if (savedVoice) $('baseVoice').value = savedVoice;
+  if (savedStyle) $('stylePrompt').value = savedStyle;
+} catch (e) { applyPreset('rex2-signature'); }
+
+// ---------- text helpers (ported from the original app's server logic) ----------
+
+function splitTextIntoSections(text, maxSectionLength = 2500) {
+  const cleaned = text.trim();
+  if (cleaned.length <= maxSectionLength) return [cleaned];
+  const paragraphs = cleaned.split(/\n\s*\n/);
+  const sections = [];
+  let current = '';
+  for (const para of paragraphs) {
+    const trimmed = para.trim();
+    if (!trimmed) continue;
+    if (current && (current.length + trimmed.length + 2 > maxSectionLength)) {
+      sections.push(current.trim());
+      current = trimmed;
+    } else {
+      current = current ? current + '\n\n' + trimmed : trimmed;
+    }
+  }
+  if (current) sections.push(current.trim());
+  const finalSections = [];
+  for (const s of sections) {
+    if (s.length <= maxSectionLength) {
+      finalSections.push(s);
+    } else {
+      const sentences = s.split(/(?<=[.!?…])\s+/);
+      let sub = '';
+      for (const sent of sentences) {
+        if (sub && (sub.length + sent.length + 1 > maxSectionLength)) {
+          finalSections.push(sub.trim());
+          sub = sent;
+        } else {
+          sub = sub ? sub + ' ' + sent : sent;
+        }
+      }
+      if (sub) finalSections.push(sub.trim());
+    }
+  }
+  return finalSections.filter(s => s.length > 0);
+}
+
+function splitTextIntoPhrases(text) {
+  const cleaned = text.trim();
+  if (!cleaned) return [];
+  const rawSentences = cleaned.replace(/\r\n/g, '\n').split(/(?<=[.!?…])\s+|\n+/);
+  const phrases = [];
+  for (const raw of rawSentences) {
+    const trimmed = raw.trim();
+    if (trimmed) phrases.push(trimmed);
+  }
+  return phrases;
+}
+
+function formatVttTimestamp(seconds) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  const ms = Math.floor((seconds % 1) * 1000);
+  const pad = (n, z = 2) => String(n).padStart(z, '0');
+  return `${pad(hours)}:${pad(minutes)}:${pad(secs)}.${pad(ms, 3)}`;
+}
+
+// ---------- audio helpers (ported from the original app's server.ts) ----------
+
+function base64ToBytes(base64) {
+  const bin = atob(base64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+function applyFadeEdges(pcm) {
+  const result = new Uint8Array(pcm);
+  const view = new DataView(result.buffer);
+  const totalSamples = Math.floor(result.length / 2);
+  if (totalSamples < 200) return result;
+  const fadeInSamples = Math.min(48, Math.floor(totalSamples / 4));
+  for (let i = 0; i < fadeInSamples; i++) {
+    const offset = i * 2;
+    const sample = view.getInt16(offset, true);
+    const factor = i / fadeInSamples;
+    view.setInt16(offset, Math.round(sample * factor), true);
+  }
+  const fadeOutSamples = Math.min(360, Math.floor(totalSamples / 4));
+  const startOffset = (totalSamples - fadeOutSamples) * 2;
+  for (let i = 0; i < fadeOutSamples; i++) {
+    const offset = startOffset + i * 2;
+    const sample = view.getInt16(offset, true);
+    const factor = (fadeOutSamples - 1 - i) / fadeOutSamples;
+    view.setInt16(offset, Math.round(sample * factor), true);
+  }
+  return result;
+}
+
+function extractPcmFromGeminiAudio(buffer) {
+  if (buffer.length < 12) return buffer;
+  const asciiAt = (start, len) => String.fromCharCode(...buffer.slice(start, start + len));
+  const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  const isRiff = asciiAt(0, 4) === 'RIFF';
+  const isWave = asciiAt(8, 4) === 'WAVE';
+  if (isRiff && isWave) {
+    let pos = 12;
+    while (pos + 8 <= buffer.length) {
+      const chunkId = asciiAt(pos, 4);
+      const chunkSize = view.getUint32(pos + 4, true);
+      const chunkDataStart = pos + 8;
+      const chunkDataEnd = Math.min(buffer.length, chunkDataStart + chunkSize);
+      if (chunkId === 'data') {
+        let pcm = buffer.slice(chunkDataStart, chunkDataEnd);
+        if (pcm.length % 2 !== 0) pcm = pcm.slice(0, pcm.length - 1);
+        return applyFadeEdges(pcm);
+      }
+      pos += 8 + chunkSize;
+      if (chunkSize % 2 !== 0) pos++;
+    }
+  }
+  let pcm = buffer;
+  if (pcm.length % 2 !== 0) pcm = pcm.slice(0, pcm.length - 1);
+  return applyFadeEdges(pcm);
+}
+
+function pcmToWavBytes(pcm) {
+  const dataSize = pcm.length;
+  const header = new Uint8Array(44);
+  const view = new DataView(header.buffer);
+  const writeStr = (offset, str) => { for (let i = 0; i < str.length; i++) header[offset + i] = str.charCodeAt(i); };
+  writeStr(0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, CHANNELS, true);
+  view.setUint32(24, SAMPLE_RATE, true);
+  view.setUint32(28, BYTES_PER_SECOND, true);
+  view.setUint16(32, CHANNELS * BYTES_PER_SAMPLE, true);
+  view.setUint16(34, 16, true);
+  writeStr(36, 'data');
+  view.setUint32(40, dataSize, true);
+  const out = new Uint8Array(44 + dataSize);
+  out.set(header, 0);
+  out.set(pcm, 44);
+  return out;
+}
+
+function concatUint8(arrays) {
+  const total = arrays.reduce((a, b) => a + b.length, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const a of arrays) { out.set(a, offset); offset += a.length; }
+  return out;
+}
+
+// ---------- pricing (ported from pricing.ts) ----------
+
+function calculateTtsCost(charCount, durationSeconds) {
+  if (charCount <= 0 || durationSeconds <= 0) return 0;
+  const inputTokens = Math.ceil(charCount * 0.5) + 40;
+  const audioTokens = Math.ceil(durationSeconds * 25);
+  const inputCost = inputTokens * (0.50 / 1_000_000);
+  const audioCost = audioTokens * (9.00 / 1_000_000);
+  return inputCost + audioCost;
+}
+function formatTtsPrice(cost) {
+  if (!cost || cost <= 0) return '0.00$';
+  if (cost < 0.005) return '0.01$';
+  return cost.toFixed(2) + '$';
+}
+
+// ---------- Gemini API call ----------
+
+async function callGeminiTts(apiKey, text, speaker, style, baseVoice) {
+  const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash-tts:generateContent`, {
+    method: 'POST',
+    headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{
+        role: 'user',
+        parts: [{ text: text, speechMetadata: { speaker: speaker, style: style } }]
+      }],
+      generationConfig: {
+        responseModalities: ['AUDIO'],
+        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: baseVoice || 'Fenrir' } } }
+      }
+    })
+  });
+  const raw = await resp.text();
+  if (!resp.ok) throw new Error(`Ошибка Gemini TTS (HTTP ${resp.status}):\n${raw}`);
+  let json;
+  try { json = JSON.parse(raw); } catch (e) { throw new Error('Не удалось разобрать ответ TTS:\n' + raw); }
+  const parts = json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts;
+  const audioPart = parts && parts.find(p => p.inlineData && p.inlineData.data);
+  if (!audioPart) throw new Error('Модель не вернула аудио. Полный ответ:\n' + raw);
+  const rawBytes = base64ToBytes(audioPart.inlineData.data);
+  return extractPcmFromGeminiAudio(rawBytes);
+}
+
+// ---------- UI wiring ----------
+
+function updateCharMeta() {
+  const text = $('scriptText').value;
+  const len = text.length;
+  $('charCount').textContent = len.toLocaleString('ru-RU') + ' / ' + MAX_CHARS.toLocaleString('ru-RU');
+  const pct = Math.min(100, (len / MAX_CHARS) * 100);
+  const fill = $('charbarFill');
+  fill.style.width = pct + '%';
+  fill.className = 'charbar-fill' + (pct > 95 ? ' danger' : pct > 80 ? ' warn' : '');
+  const wordCount = text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0;
+  const estSeconds = wordCount > 0 ? Math.max(1, Math.round(wordCount / 2.2)) : 0;
+  $('costEstimate').textContent = formatTtsPrice(calculateTtsCost(len, estSeconds));
+  const h = Math.floor(estSeconds / 3600), m = Math.floor((estSeconds % 3600) / 60), s = estSeconds % 60;
+  $('durationEstimate').textContent = h > 0 ? `~${h} ч ${m} мин` : m > 0 ? `~${m} мин ${s > 0 ? s + ' сек' : ''}` : `~${s} сек`;
+}
+$('scriptText').addEventListener('input', updateCharMeta);
+updateCharMeta();
+
+function setStep(id, state) {
+  const el = $(id);
+  el.classList.remove('active', 'done', 'error');
+  if (state) el.classList.add(state);
+}
+function showError(msg) {
+  const box = $('errorBox');
+  box.textContent = msg;
+  box.classList.add('show');
+}
+
+$('testVoiceBtn').addEventListener('click', async () => {
+  const apiKey = $('apiKey').value.trim();
+  if (!apiKey) { alert('Сначала вставь API-ключ.'); return; }
+  const btn = $('testVoiceBtn');
+  btn.disabled = true;
+  const originalLabel = btn.textContent;
+  btn.textContent = 'Генерация примера...';
+  try {
+    const style = $('stylePrompt').value.trim() ? `${DEFAULT_REX_STYLE} Additional nuance: ${$('stylePrompt').value.trim()}` : DEFAULT_REX_STYLE;
+    const pcm = await callGeminiTts(apiKey, 'Привет! Это тестовый образец голоса Rex 2. Озвучка готова к работе.', 'Rex 2', style, $('baseVoice').value.trim() || 'Fenrir');
+    const wav = pcmToWavBytes(pcm);
+    const blob = new Blob([wav], { type: 'audio/wav' });
+    const audio = new Audio(URL.createObjectURL(blob));
+    audio.play();
+  } catch (err) {
+    alert('Не удалось получить пример голоса:\n' + (err.message || err));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+});
+
+$('generateBtn').addEventListener('click', async () => {
+  const apiKey = $('apiKey').value.trim();
+  const baseVoice = $('baseVoice').value.trim() || 'Fenrir';
+  const stylePromptRaw = $('stylePrompt').value.trim();
+  const text = $('scriptText').value.trim();
+
+  $('errorBox').classList.remove('show');
+  $('results').classList.remove('show');
+  ['step-tts', 'step-build'].forEach(id => setStep(id, null));
+
+  if (!apiKey) { showError('Вставь API-ключ.'); $('status').classList.add('show'); return; }
+  if (!text) { showError('Вставь текст сценария.'); $('status').classList.add('show'); return; }
+  if (text.length > MAX_CHARS) { showError(`Текст превышает лимит ${MAX_CHARS.toLocaleString('ru-RU')} символов (сейчас: ${text.length.toLocaleString('ru-RU')}).`); $('status').classList.add('show'); return; }
+
+  $('generateBtn').disabled = true;
+  $('status').classList.add('show');
+  setStep('step-tts', 'active');
+
+  try {
+    const sections = splitTextIntoSections(text, 2500);
+    const style = stylePromptRaw ? `${DEFAULT_REX_STYLE} Additional nuance: ${stylePromptRaw}` : DEFAULT_REX_STYLE;
+
+    const pcmChunks = [];
+    const cues = [];
+    let currentAudioSeconds = 0;
+
+    for (let sIdx = 0; sIdx < sections.length; sIdx++) {
+      $('step-tts-label').textContent = sections.length === 1
+        ? 'Синтез речи (Gemini 3.8 Flash TTS)'
+        : `Синтез блока ${sIdx + 1} из ${sections.length}`;
+
+      const sectionText = sections[sIdx];
+      const sectionPhrases = splitTextIntoPhrases(sectionText);
+      const sectionPcm = await callGeminiTts(apiKey, sectionText, 'Rex 2', style, baseVoice);
+      const sectionDuration = sectionPcm.length / BYTES_PER_SECOND;
+
+      const totalCharsInSection = sectionPhrases.reduce((acc, p) => acc + p.length, 0) || 1;
+      let runningTime = currentAudioSeconds;
+
+      for (let pIdx = 0; pIdx < sectionPhrases.length; pIdx++) {
+        const phrase = sectionPhrases[pIdx];
+        const phraseShare = phrase.length / totalCharsInSection;
+        const phraseDuration = sectionDuration * phraseShare;
+        const startTime = runningTime;
+        const endTime = (pIdx === sectionPhrases.length - 1) ? currentAudioSeconds + sectionDuration : startTime + phraseDuration;
+        cues.push({ id: cues.length + 1, text: phrase, startTime, endTime });
+        runningTime = endTime;
+      }
+
+      pcmChunks.push(sectionPcm);
+      currentAudioSeconds += sectionDuration;
+    }
+    setStep('step-tts', 'done');
+
+    setStep('step-build', 'active');
+    const combinedPcm = concatUint8(pcmChunks);
+    const wavBytes = pcmToWavBytes(combinedPcm);
+    const audioBlob = new Blob([wavBytes], { type: 'audio/wav' });
+
+    let vttContent = 'WEBVTT - Rex 2 Voiceover\n';
+    vttContent += 'Voice: Rex 2 (Gemini Flagship TTS)\n';
+    vttContent += `Date: ${new Date().toISOString()}\n\n`;
+    for (const cue of cues) {
+      vttContent += `${cue.id}\n${formatVttTimestamp(cue.startTime)} --> ${formatVttTimestamp(cue.endTime)}\n${cue.text}\n\n`;
+    }
+    const vttBlob = new Blob([vttContent], { type: 'text/vtt;charset=utf-8' });
+    setStep('step-build', 'done');
+
+    const audioUrl = URL.createObjectURL(audioBlob);
+    const vttUrl = URL.createObjectURL(vttBlob);
+
+    $('audioPlayer').src = audioUrl;
+    $('audioDownload').href = audioUrl;
+    $('audioDownload').download = `rex2_audio_${Date.now()}.wav`;
+    $('audioMeta').textContent = (audioBlob.size / 1024 / 1024).toFixed(2) + ' МБ · ' + Math.round(currentAudioSeconds) + ' сек · ' + formatTtsPrice(calculateTtsCost(text.length, currentAudioSeconds));
+
+    $('vttDownload').href = vttUrl;
+    $('vttDownload').download = `rex2_subtitles_${Date.now()}.vtt`;
+    $('vttMeta').textContent = cues.length + ' фраз';
+
+    $('results').classList.add('show');
+  } catch (err) {
+    const failedStep = ['step-tts', 'step-build'].find(id => $(id).classList.contains('active'));
+    if (failedStep) setStep(failedStep, 'error');
+    showError(String(err.message || err));
+  } finally {
+    $('generateBtn').disabled = false;
+  }
+});
+</script>
+</body>
+</html>
