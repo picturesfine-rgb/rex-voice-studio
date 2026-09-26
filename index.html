@@ -667,23 +667,77 @@ window.RexEngine = (function () {
     return { total: src.length, chunk: src.slice(offset, offset + length) };
   }
 
-  // Saves the finished result straight to the browser's normal Downloads folder —
-  // no manual "Скачать" click needed, this does it programmatically once a run is done.
+  // --- minimal "stored" (uncompressed) ZIP writer, no external libs ---
+  // Chrome silently blocks a second auto-triggered download right after the first one
+  // (no per-file user gesture), so wav+vtt must go out as ONE file, not two anchors.
+  const CRC_TABLE = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+  function crc32(bytes) {
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  function u16le(n) { return [n & 0xFF, (n >>> 8) & 0xFF]; }
+  function u32le(n) { return [n & 0xFF, (n >>> 8) & 0xFF, (n >>> 16) & 0xFF, (n >>> 24) & 0xFF]; }
+  function strBytes(s) { return Array.from(s, ch => ch.charCodeAt(0)); }
+
+  function buildZip(files) {
+    // files: [{ name, bytes: Uint8Array }]
+    const localParts = [];
+    const centralParts = [];
+    let offset = 0;
+    for (const f of files) {
+      const nameBytes = strBytes(f.name);
+      const crc = crc32(f.bytes);
+      const size = f.bytes.length;
+      const localHeader = new Uint8Array([
+        0x50, 0x4B, 0x03, 0x04, ...u16le(20), ...u16le(0), ...u16le(0), ...u16le(0), ...u16le(0),
+        ...u32le(crc), ...u32le(size), ...u32le(size), ...u16le(nameBytes.length), ...u16le(0),
+        ...nameBytes,
+      ]);
+      localParts.push(localHeader, f.bytes);
+      const centralHeader = new Uint8Array([
+        0x50, 0x4B, 0x01, 0x02, ...u16le(20), ...u16le(20), ...u16le(0), ...u16le(0), ...u16le(0), ...u16le(0),
+        ...u32le(crc), ...u32le(size), ...u32le(size), ...u16le(nameBytes.length), ...u16le(0), ...u16le(0),
+        ...u16le(0), ...u16le(0), ...u32le(0), ...u32le(offset),
+        ...nameBytes,
+      ]);
+      centralParts.push(centralHeader);
+      offset += localHeader.length + f.bytes.length;
+    }
+    const centralStart = offset;
+    let centralSize = 0;
+    for (const c of centralParts) centralSize += c.length;
+    const eocd = new Uint8Array([
+      0x50, 0x4B, 0x05, 0x06, ...u16le(0), ...u16le(0), ...u16le(files.length), ...u16le(files.length),
+      ...u32le(centralSize), ...u32le(centralStart), ...u16le(0),
+    ]);
+    return new Blob([...localParts, ...centralParts, eocd], { type: 'application/zip' });
+  }
+
+  // Saves the finished result straight to the browser's normal Downloads folder as ONE
+  // .zip (audio + subtitles) — no manual "Скачать" click needed.
   function downloadResult(baseName) {
     if (!window.__rexResult) return { ok: false, error: 'Нет готового результата.' };
     baseName = baseName || ('rex2_' + Date.now());
     const wavBytes = base64ToBytes(window.__rexResult.wavBase64);
-    const audioBlob = new Blob([wavBytes], { type: 'audio/wav' });
-    const vttBlob = new Blob([window.__rexResult.vttContent], { type: 'text/vtt;charset=utf-8' });
-    const a1 = document.createElement('a');
-    a1.href = URL.createObjectURL(audioBlob);
-    a1.download = baseName + '.wav';
-    document.body.appendChild(a1); a1.click(); a1.remove();
-    const a2 = document.createElement('a');
-    a2.href = URL.createObjectURL(vttBlob);
-    a2.download = baseName + '.vtt';
-    document.body.appendChild(a2); a2.click(); a2.remove();
-    return { ok: true, wavName: baseName + '.wav', vttName: baseName + '.vtt', wavBytes: wavBytes.length };
+    const vttBytes = new TextEncoder().encode(window.__rexResult.vttContent);
+    const zipBlob = buildZip([
+      { name: baseName + '.wav', bytes: wavBytes },
+      { name: baseName + '.vtt', bytes: vttBytes },
+    ]);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(zipBlob);
+    a.download = baseName + '.zip';
+    document.body.appendChild(a); a.click(); a.remove();
+    return { ok: true, zipName: baseName + '.zip', wavBytes: wavBytes.length, vttBytes: vttBytes.length, zipBytes: zipBlob.size };
   }
 
   return { run, status, getChunk, downloadResult };
