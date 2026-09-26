@@ -541,6 +541,136 @@ $('testVoiceBtn').addEventListener('click', async () => {
   }
 });
 
+// ---------- Headless engine API (for automated/driven use — no UI clicks needed) ----------
+// Claude drives this directly via browser JS execution: call RexEngine.run(text, opts) once
+// (fire-and-forget — it resolves in the background), then poll RexEngine.status() for the
+// current stage/percent, and once state is "done" pull the result out with
+// RexEngine.getChunk(...) in slices (the audio is too big to return in one shot).
+window.RexEngine = (function () {
+  function freshState() {
+    return {
+      state: 'idle',      // idle | running | done | error
+      stage: null,        // tts | build | done
+      sectionIndex: 0,
+      sectionTotal: 0,
+      percent: 0,
+      message: '',
+      charCount: 0,
+      durationSeconds: 0,
+      phraseCount: 0,
+      cost: 0,
+      error: null,
+      hasResult: false,
+    };
+  }
+  window.__rexRun = freshState();
+  window.__rexResult = null; // { wavBase64, vttContent }
+
+  async function run(text, opts) {
+    opts = opts || {};
+    const apiKey = (opts.apiKey || localStorage.getItem('rex_api_key') || '').trim();
+    const baseVoice = (opts.baseVoice || 'Fenrir').trim();
+    const stylePromptRaw = (opts.stylePrompt || '').trim();
+
+    const st = window.__rexRun = freshState();
+    window.__rexResult = null;
+    st.state = 'running';
+    st.charCount = text ? text.length : 0;
+
+    try {
+      if (!apiKey) throw new Error('Нет API-ключа Gemini.');
+      if (!text || !text.trim()) throw new Error('Пустой текст сценария.');
+      if (text.length > MAX_CHARS) throw new Error(`Текст превышает лимит ${MAX_CHARS} символов (сейчас ${text.length}).`);
+
+      const sections = splitTextIntoSections(text.trim(), 2500);
+      const style = stylePromptRaw ? `${DEFAULT_REX_STYLE} Additional nuance: ${stylePromptRaw}` : DEFAULT_REX_STYLE;
+
+      st.stage = 'tts';
+      st.sectionTotal = sections.length;
+
+      const pcmChunks = [];
+      const cues = [];
+      let currentAudioSeconds = 0;
+
+      for (let sIdx = 0; sIdx < sections.length; sIdx++) {
+        st.sectionIndex = sIdx + 1;
+        st.percent = Math.round((sIdx / sections.length) * 85);
+        st.message = sections.length === 1
+          ? 'Озвучиваю текст целиком (Gemini 3.8 Flash TTS)...'
+          : `Озвучиваю блок ${sIdx + 1} из ${sections.length}...`;
+
+        const sectionText = sections[sIdx];
+        const sectionPhrases = splitTextIntoPhrases(sectionText);
+        const sectionPcm = await callGeminiTts(apiKey, sectionText, 'Rex 2', style, baseVoice);
+        const sectionDuration = sectionPcm.length / BYTES_PER_SECOND;
+
+        const totalCharsInSection = sectionPhrases.reduce((acc, p) => acc + p.length, 0) || 1;
+        let runningTime = currentAudioSeconds;
+        for (let pIdx = 0; pIdx < sectionPhrases.length; pIdx++) {
+          const phrase = sectionPhrases[pIdx];
+          const phraseShare = phrase.length / totalCharsInSection;
+          const phraseDuration = sectionDuration * phraseShare;
+          const startTime = runningTime;
+          const endTime = (pIdx === sectionPhrases.length - 1) ? currentAudioSeconds + sectionDuration : startTime + phraseDuration;
+          cues.push({ id: cues.length + 1, text: phrase, startTime, endTime });
+          runningTime = endTime;
+        }
+        pcmChunks.push(sectionPcm);
+        currentAudioSeconds += sectionDuration;
+      }
+      st.stage = 'build';
+      st.percent = 92;
+      st.message = 'Собираю аудиофайл и файл субтитров...';
+
+      const combinedPcm = concatUint8(pcmChunks);
+      const wavBytes = pcmToWavBytes(combinedPcm);
+      let wavBinary = '';
+      const CHUNK_SZ = 0x8000;
+      for (let i = 0; i < wavBytes.length; i += CHUNK_SZ) {
+        wavBinary += String.fromCharCode.apply(null, wavBytes.subarray(i, i + CHUNK_SZ));
+      }
+      const wavBase64 = btoa(wavBinary);
+
+      let vttContent = 'WEBVTT - Rex 2 Voiceover\n';
+      vttContent += 'Voice: Rex 2 (Gemini Flagship TTS)\n';
+      vttContent += `Date: ${new Date().toISOString()}\n\n`;
+      for (const cue of cues) {
+        vttContent += `${cue.id}\n${formatVttTimestamp(cue.startTime)} --> ${formatVttTimestamp(cue.endTime)}\n${cue.text}\n\n`;
+      }
+
+      window.__rexResult = { wavBase64, vttContent };
+      st.durationSeconds = currentAudioSeconds;
+      st.phraseCount = cues.length;
+      st.cost = calculateTtsCost(text.length, currentAudioSeconds);
+      st.hasResult = true;
+      st.stage = 'done';
+      st.percent = 100;
+      st.message = 'Готово.';
+      st.state = 'done';
+    } catch (err) {
+      st.state = 'error';
+      st.error = String((err && err.message) || err);
+    }
+  }
+
+  function status() {
+    return JSON.parse(JSON.stringify(window.__rexRun || freshState()));
+  }
+
+  // kind: 'wav' | 'vtt'. Returns a slice of the underlying string plus its total length,
+  // so a driver can page through large payloads instead of pulling megabytes in one call.
+  function getChunk(kind, offset, length) {
+    if (!window.__rexResult) return { total: 0, chunk: '' };
+    const src = kind === 'vtt' ? window.__rexResult.vttContent : window.__rexResult.wavBase64;
+    offset = offset || 0;
+    length = length || 200000;
+    return { total: src.length, chunk: src.slice(offset, offset + length) };
+  }
+
+  return { run, status, getChunk };
+})();
+// ---------- end headless engine API ----------
+
 $('generateBtn').addEventListener('click', async () => {
   const apiKey = $('apiKey').value.trim();
   const baseVoice = $('baseVoice').value.trim() || 'Fenrir';
